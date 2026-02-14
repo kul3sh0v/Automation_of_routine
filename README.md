@@ -52,3 +52,9 @@ A simple Python utility that renames files in a directory according to specific 
 
 > **Перед запуском обязательно сделайте резервную копию папки!**  
 > Скрипт вносит **необратимые изменения** в имена файлов.
+
+---
+
+# ansible_auto_vpn
+Авто-развертывание VPN на Ansible Xray VLESS+Reality под Ubuntu с выгрузкой клиентских артефактов.
+Подробности и запуск: [ansible_auto_vpn](ansible_auto_vpn/README.md)

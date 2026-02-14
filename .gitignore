@@ -1,3 +1,5 @@
+ansible_auto_vpn/artifacts/
+*.retry
 __pycache__/
 *.py[cod]
 *$py.class
