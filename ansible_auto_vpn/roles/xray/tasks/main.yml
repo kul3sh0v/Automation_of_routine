@@ -1,0 +1,107 @@
+- name: Create xray user
+  user:
+    name: "{{ xray_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Create xray directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ xray_user }}"
+    group: "{{ xray_user }}"
+    mode: "0755"
+  loop:
+    - /etc/xray
+    - /var/log/xray
+    - /usr/local/share/xray
+
+- name: Download Xray release
+  get_url:
+    url: "https://github.com/XTLS/Xray-core/releases/download/v{{ xray_version }}/Xray-linux-64.zip"
+    dest: "/tmp/xray-{{ xray_version }}.zip"
+    mode: "0644"
+
+- name: Unarchive Xray
+  unarchive:
+    src: "/tmp/xray-{{ xray_version }}.zip"
+    dest: "/tmp/xray-{{ xray_version }}"
+    remote_src: true
+
+- name: Install xray binary
+  copy:
+    src: "/tmp/xray-{{ xray_version }}/xray"
+    dest: /usr/local/bin/xray
+    mode: "0755"
+    owner: root
+    group: root
+    remote_src: true
+
+- name: Install geoip/geosite
+  copy:
+    src: "/tmp/xray-{{ xray_version }}/{{ item }}"
+    dest: "/usr/local/share/xray/{{ item }}"
+    mode: "0644"
+    owner: root
+    group: root
+    remote_src: true
+  loop:
+    - geoip.dat
+    - geosite.dat
+
+- name: Generate UUID if not provided
+  command: uuidgen
+  register: uuid_out
+  changed_when: false
+  when: xray_uuid is not defined or xray_uuid | length == 0
+
+- name: Set UUID fact
+  set_fact:
+    xray_uuid: "{{ xray_uuid | default(uuid_out.stdout) }}"
+
+- name: Generate short ID if not provided
+  command: openssl rand -hex 8
+  register: short_id_out
+  changed_when: false
+  when: xray_short_id is not defined or xray_short_id | length == 0
+
+- name: Set short ID fact
+  set_fact:
+    xray_short_id: "{{ xray_short_id | default(short_id_out.stdout) }}"
+
+- name: Generate Reality keypair if not provided
+  command: /usr/local/bin/xray x25519
+  register: x25519_out
+  changed_when: false
+  when: xray_private_key is not defined or xray_private_key | length == 0 or xray_public_key is not defined or xray_public_key | length == 0
+
+- name: Set Reality keys
+  set_fact:
+    xray_private_key: "{{ xray_private_key | default(x25519_out.stdout | regex_search('Private key: ([A-Za-z0-9+/=]+)', '\\1')) }}"
+    xray_public_key: "{{ xray_public_key | default(x25519_out.stdout | regex_search('Public key: ([A-Za-z0-9+/=]+)', '\\1')) }}"
+
+- name: Install systemd service
+  template:
+    src: xray.service.j2
+    dest: /etc/systemd/system/xray.service
+    mode: "0644"
+
+- name: Install Xray config
+  template:
+    src: config.json.j2
+    dest: /etc/xray/config.json
+    owner: "{{ xray_user }}"
+    group: "{{ xray_user }}"
+    mode: "0640"
+  notify: restart xray
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Enable and start xray
+  systemd:
+    name: xray
+    state: started
+    enabled: true

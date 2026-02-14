@@ -1,0 +1,16 @@
+- name: Allow SSH
+  ufw:
+    rule: allow
+    name: OpenSSH
+  when: ufw_allow_ssh | default(true)
+
+- name: Allow Xray port
+  ufw:
+    rule: allow
+    port: "{{ xray_port }}"
+    proto: tcp
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: deny

@@ -1,0 +1,23 @@
+- name: Create local artifacts directory
+  file:
+    path: "{{ clients_output_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Render client JSON config
+  template:
+    src: client.json.j2
+    dest: "{{ clients_output_dir }}/{{ inventory_hostname }}/client.json"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: Render client VLESS URL
+  template:
+    src: client.txt.j2
+    dest: "{{ clients_output_dir }}/{{ inventory_hostname }}/client.txt"
+    mode: "0644"
+  delegate_to: localhost
+  become: false

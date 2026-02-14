@@ -1,0 +1,21 @@
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - unzip
+      - openssl
+      - ufw
+    state: present
+
+- name: Enable IPv4 forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true

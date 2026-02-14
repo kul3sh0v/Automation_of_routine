@@ -1,0 +1,28 @@
+# Xray install
+xray_version: "1.8.10"
+
+# Service user
+xray_user: "xray"
+
+# Inbound
+xray_port: 443
+xray_domain: "vpn.example.com"
+
+# Reality settings
+xray_reality_dest: "www.cloudflare.com:443"
+xray_reality_server_names:
+  - "www.cloudflare.com"
+xray_reality_fingerprint: "chrome"
+xray_flow: "xtls-rprx-vision"
+
+# Optional: preseed these to avoid regeneration
+# xray_uuid: ""
+# xray_short_id: ""
+# xray_private_key: ""
+# xray_public_key: ""
+
+# Firewall
+ufw_allow_ssh: true
+
+# Artifacts output on control machine
+clients_output_dir: "artifacts"

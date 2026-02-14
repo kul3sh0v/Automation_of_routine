@@ -1,0 +1,8 @@
+- name: Provision Xray VLESS+Reality VPN
+  hosts: vpn
+  become: true
+  roles:
+    - base
+    - firewall
+    - xray
+    - artifacts
