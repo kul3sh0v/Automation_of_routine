@@ -15,11 +15,11 @@ xray_reality_server_names:
 xray_reality_fingerprint: "chrome"
 xray_flow: "xtls-rprx-vision"
 
-# Optional: preseed these to avoid regeneration
-# xray_uuid: ""
-# xray_short_id: ""
-# xray_private_key: ""
-# xray_public_key: ""
+# Xray settings
+xray_uuid: ""
+xray_short_id: ""
+xray_private_key: ""
+xray_public_key: ""
 
 # Firewall
 ufw_allow_ssh: true
