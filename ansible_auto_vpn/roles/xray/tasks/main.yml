@@ -105,3 +105,10 @@
     name: xray
     state: started
     enabled: true
+
+- name: Restart xray service
+  systemd:
+    name: xray
+    state: restarted
+  tags:
+    - restart
