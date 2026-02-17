@@ -1,3 +1,11 @@
+- name: Check OS is Ubuntu or Debian
+  assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+      - ansible_facts['distribution'] in ['Ubuntu', 'Debian']
+    fail_msg: "This playbook only supports Ubuntu or Debian"
+    success_msg: "OS check passed"
+
 - name: Update apt cache
   apt:
     update_cache: true
