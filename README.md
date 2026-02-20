@@ -58,3 +58,31 @@ A simple Python utility that renames files in a directory according to specific 
 # ansible_auto_vpn
 Авто-развертывание VPN на Ansible Xray VLESS+Reality под Ubuntu с выгрузкой клиентских артефактов.
 Подробности и запуск: [ansible_auto_vpn](ansible_auto_vpn/README.md)
+
+---
+
+# unpack.sh
+Bash-функция `unpack`, которая распаковывает архив по расширению файла.
+Поддерживаются популярные форматы: `tar.*`, `zip`, `7z`, `rar`, `gz`, `bz2`, `xz`, `zst`.
+Можно передать второй аргумент — каталог назначения для распаковки.
+
+## Использование
+
+```bash
+# запуск файла как исполняемого скрипта
+./unpack.sh archive.tar.gz ./output
+./unpack.sh docs.zip /tmp/unpack_here
+
+# или как функцию в текущей shell-сессии
+source unpack.sh
+unpack archive.tar.gz ./output
+unpack docs.zip
+```
+
+## Коды возврата
+
+- `0` — успешно
+- `1` — файл не найден или это не файл
+- `2` — не передан аргумент (`unpack <archive> [destination_dir]`)
+- `3` — неподдерживаемый формат
+- `127` — не установлена нужная утилита для распаковки (`unzip`, `7z`, `unrar` и т.д.)
