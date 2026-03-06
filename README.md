@@ -61,6 +61,12 @@ A simple Python utility that renames files in a directory according to specific 
 
 ---
 
+# ansible_auto_auditd
+Автономная установка и настройка auditd на Ansible с пошаговыми проверками и загрузкой правил аудита.
+Подробности и запуск: [ansible_auto_auditd](ansible_auto_auditd/README.md)
+
+---
+
 # unpack.sh
 Bash-функция `unpack`, которая распаковывает архив по расширению файла.
 Поддерживаются популярные форматы: `tar.*`, `zip`, `7z`, `rar`, `gz`, `bz2`, `xz`, `zst`.
