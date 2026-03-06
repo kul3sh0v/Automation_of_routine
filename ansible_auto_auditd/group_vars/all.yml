@@ -1,0 +1,9 @@
+---
+auditd_service_name: auditd
+auditd_conf_path: /etc/audit/auditd.conf
+auditd_rules_dir: /etc/audit/rules.d
+auditd_rules_file: /etc/audit/rules.d/server.rules
+auditd_log_file: /var/log/audit/audit.log
+auditd_log_tail_lines: 20
+auditd_fail_when_kernel_disabled: false
+

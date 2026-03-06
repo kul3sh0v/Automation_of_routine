@@ -1,0 +1,366 @@
+---
+- name: "Шаг 1/11 | START | Проверка auditctl -s"
+  ansible.builtin.debug:
+    msg: "Идет шаг 1/11: проверяю, установлен ли auditd через команду auditctl -s."
+
+- name: "Шаг 1/11 | Выполнить auditctl -s"
+  ansible.builtin.command: auditctl -s
+  register: auditctl_status
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 1/11 | Вывести результат проверки auditctl"
+  ansible.builtin.debug:
+    msg: >-
+      {% if auditctl_status.rc == 0 %}
+      auditctl доступен. Текущий вывод auditctl -s: {{ auditctl_status.stdout | default('пусто') }}
+      {% else %}
+      auditctl недоступен (rc={{ auditctl_status.rc }}). Продолжаю установкой auditd.
+      {% endif %}
+
+- name: "Шаг 1/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 1/11 завершен. Перехожу к шагу 2/11."
+
+- name: "Шаг 2/11 | START | Установка auditd"
+  ansible.builtin.debug:
+    msg: "Идет шаг 2/11: определяю ОС и устанавливаю нужные пакеты auditd."
+
+- name: "Шаг 2/11 | Проверить поддержку ОС"
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family in auditd_packages_map
+    fail_msg: >-
+      Неподдерживаемая ОС (ansible_os_family={{ ansible_os_family }}).
+      Поддерживаются: {{ auditd_packages_map.keys() | list | join(', ') }}.
+    success_msg: "ОС поддерживается: {{ ansible_os_family }}."
+
+- name: "Шаг 2/11 | Обновить apt cache (Debian/Ubuntu)"
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: "Шаг 2/11 | Установить пакеты auditd"
+  ansible.builtin.package:
+    name: "{{ auditd_packages_map[ansible_os_family] }}"
+    state: present
+  register: auditd_install_result
+
+- name: "Шаг 2/11 | Вывести результат установки"
+  ansible.builtin.debug:
+    msg: >-
+      Пакеты {{ auditd_packages_map[ansible_os_family] | join(', ') }} проверены/установлены.
+      Изменения: {{ auditd_install_result.changed }}.
+
+- name: "Шаг 2/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 2/11 завершен. Перехожу к шагу 3/11."
+
+- name: "Шаг 3/11 | START | Проверка и запуск сервиса auditd"
+  ansible.builtin.debug:
+    msg: "Идет шаг 3/11: проверяю состояние службы auditd и включаю ее при необходимости."
+
+- name: "Шаг 3/11 | Проверить, что init-система это systemd"
+  ansible.builtin.assert:
+    that:
+      - ansible_service_mgr == "systemd"
+    fail_msg: "Этот проект поддерживает только systemd-хосты. Найдено: {{ ansible_service_mgr }}."
+    success_msg: "systemd обнаружен."
+
+- name: "Шаг 3/11 | Выполнить systemctl status auditd"
+  ansible.builtin.command: "systemctl status {{ auditd_service_name }}"
+  register: auditd_status_before
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 3/11 | Проверить active-состояние auditd"
+  ansible.builtin.command: "systemctl is-active {{ auditd_service_name }}"
+  register: auditd_active_before
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 3/11 | Вывести текущее состояние сервиса"
+  ansible.builtin.debug:
+    msg: >-
+      Текущее состояние auditd: {{ auditd_active_before.stdout | default('unknown') | trim }}
+      (rc={{ auditd_active_before.rc }}).
+
+- name: "Шаг 3/11 | Включить и запустить auditd если не active"
+  ansible.builtin.systemd:
+    name: "{{ auditd_service_name }}"
+    enabled: true
+    state: started
+  when: auditd_active_before.stdout | default('') | trim != "active"
+
+- name: "Шаг 3/11 | Повторно проверить active-состояние auditd"
+  ansible.builtin.command: "systemctl is-active {{ auditd_service_name }}"
+  register: auditd_active_after
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 3/11 | Проверить, что auditd active"
+  ansible.builtin.assert:
+    that:
+      - auditd_active_after.stdout | trim == "active"
+    fail_msg: "auditd не стал active. Текущее состояние: {{ auditd_active_after.stdout | trim }}."
+    success_msg: "auditd active."
+
+- name: "Шаг 3/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 3/11 завершен. Перехожу к шагу 4/11."
+
+- name: "Шаг 4/11 | START | Проверка kernel audit параметра"
+  ansible.builtin.debug:
+    msg: "Идет шаг 4/11: проверяю /proc/cmdline на наличие параметра audit."
+
+- name: "Шаг 4/11 | Прочитать /proc/cmdline"
+  ansible.builtin.slurp:
+    src: /proc/cmdline
+  register: kernel_cmdline_raw
+
+- name: "Шаг 4/11 | Подготовить флаги kernel audit"
+  ansible.builtin.set_fact:
+    kernel_cmdline: "{{ kernel_cmdline_raw.content | b64decode | trim }}"
+    audit_kernel_param_present: "{{ (kernel_cmdline_raw.content | b64decode | trim) is regex('(^|\\s)audit=(0|1)(\\s|$)') }}"
+    audit_kernel_disabled: "{{ (kernel_cmdline_raw.content | b64decode | trim) is regex('(^|\\s)audit=0(\\s|$)') }}"
+    audit_kernel_enabled: "{{ (kernel_cmdline_raw.content | b64decode | trim) is regex('(^|\\s)audit=1(\\s|$)') }}"
+
+- name: "Шаг 4/11 | Вывести текущий cmdline"
+  ansible.builtin.debug:
+    msg: "Текущий kernel cmdline: {{ kernel_cmdline }}"
+
+- name: "Шаг 4/11 | Сообщить, если audit-параметр отсутствует"
+  ansible.builtin.debug:
+    msg: "Параметр audit в kernel cmdline отсутствует. Это допустимо."
+  when: not audit_kernel_param_present
+
+- name: "Шаг 4/11 | Сообщить, если найден audit=1"
+  ansible.builtin.debug:
+    msg: "Найден audit=1: kernel audit включен."
+  when: audit_kernel_enabled
+
+- name: "Шаг 4/11 | Сообщить, если найден audit=0"
+  ansible.builtin.debug:
+    msg: >-
+      ВНИМАНИЕ: найден audit=0, kernel audit отключен.
+      Для исправления добавьте audit=1 в GRUB, пересоберите конфиг и перезагрузите сервер.
+  when: audit_kernel_disabled
+
+- name: "Шаг 4/11 | Опционально завершить playbook при audit=0"
+  ansible.builtin.assert:
+    that:
+      - not audit_kernel_disabled
+    fail_msg: >-
+      Обнаружен audit=0. Включите audit=1 в параметрах GRUB и перезагрузите сервер,
+      затем запустите playbook повторно.
+    success_msg: "audit=0 не обнаружен."
+  when: auditd_fail_when_kernel_disabled | bool
+
+- name: "Шаг 4/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 4/11 завершен. Перехожу к шагу 5/11."
+
+- name: "Шаг 5/11 | START | Проверка ключевых файлов auditd"
+  ansible.builtin.debug:
+    msg: "Идет шаг 5/11: проверяю основные файлы и каталог rules.d."
+
+- name: "Шаг 5/11 | Проверить /etc/audit/auditd.conf"
+  ansible.builtin.stat:
+    path: "{{ auditd_conf_path }}"
+  register: auditd_conf_stat
+
+- name: "Шаг 5/11 | Проверить /etc/audit/audit.rules"
+  ansible.builtin.stat:
+    path: /etc/audit/audit.rules
+  register: auditd_legacy_rules_stat
+
+- name: "Шаг 5/11 | Проверить каталог rules.d"
+  ansible.builtin.stat:
+    path: "{{ auditd_rules_dir }}"
+  register: auditd_rules_dir_stat
+
+- name: "Шаг 5/11 | Найти *.rules в rules.d"
+  ansible.builtin.find:
+    paths: "{{ auditd_rules_dir }}"
+    patterns: "*.rules"
+    file_type: file
+  register: auditd_rules_discovered
+  when: auditd_rules_dir_stat.stat.exists
+
+- name: "Шаг 5/11 | Вывести состояние ключевых файлов"
+  ansible.builtin.debug:
+    msg:
+      - "{{ auditd_conf_path }} exists={{ auditd_conf_stat.stat.exists }}"
+      - "/etc/audit/audit.rules exists={{ auditd_legacy_rules_stat.stat.exists }}"
+      - "{{ auditd_rules_dir }} exists={{ auditd_rules_dir_stat.stat.exists }}"
+      - "Количество rules.d/*.rules: {{ (auditd_rules_discovered.matched if (auditd_rules_discovered is defined) else 0) }}"
+
+- name: "Шаг 5/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 5/11 завершен. Перехожу к шагу 6/11."
+
+- name: "Шаг 6/11 | START | Настройка auditd.conf"
+  ansible.builtin.debug:
+    msg: "Идет шаг 6/11: применяю заданный конфиг /etc/audit/auditd.conf."
+
+- name: "Шаг 6/11 | Применить auditd.conf"
+  ansible.builtin.template:
+    src: auditd.conf.j2
+    dest: "{{ auditd_conf_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  register: auditd_conf_apply_result
+  notify: restart auditd
+
+- name: "Шаг 6/11 | Вывести результат применения auditd.conf"
+  ansible.builtin.debug:
+    msg: "Файл {{ auditd_conf_path }} обновлен: {{ auditd_conf_apply_result.changed }}."
+
+- name: "Шаг 6/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 6/11 завершен. Перехожу к шагу 7/11."
+
+- name: "Шаг 7/11 | START | Перезапуск auditd и проверка"
+  ansible.builtin.debug:
+    msg: "Идет шаг 7/11: выполняю pending-handler и проверяю состояние службы."
+
+- name: "Шаг 7/11 | Выполнить pending handlers"
+  ansible.builtin.meta: flush_handlers
+
+- name: "Шаг 7/11 | Проверить systemctl status auditd после перезапуска"
+  ansible.builtin.command: "systemctl status {{ auditd_service_name }}"
+  register: auditd_status_after_restart
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 7/11 | Проверить systemctl is-active auditd после перезапуска"
+  ansible.builtin.command: "systemctl is-active {{ auditd_service_name }}"
+  register: auditd_active_after_restart
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 7/11 | Убедиться, что auditd active после перезапуска"
+  ansible.builtin.assert:
+    that:
+      - auditd_active_after_restart.stdout | trim == "active"
+    fail_msg: "После перезапуска auditd не active: {{ auditd_active_after_restart.stdout | trim }}."
+    success_msg: "auditd active после перезапуска."
+
+- name: "Шаг 7/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 7/11 завершен. Перехожу к шагу 8/11."
+
+- name: "Шаг 8/11 | START | Проверка записи логов auditd"
+  ansible.builtin.debug:
+    msg: "Идет шаг 8/11: проверяю файл лога и вывожу последние строки."
+
+- name: "Шаг 8/11 | Проверить существование audit.log"
+  ansible.builtin.stat:
+    path: "{{ auditd_log_file }}"
+  register: auditd_log_stat
+
+- name: "Шаг 8/11 | Убедиться, что audit.log существует"
+  ansible.builtin.assert:
+    that:
+      - auditd_log_stat.stat.exists
+    fail_msg: "Файл {{ auditd_log_file }} не найден."
+    success_msg: "Файл {{ auditd_log_file }} найден."
+
+- name: "Шаг 8/11 | Прочитать последние строки audit.log"
+  ansible.builtin.command: "tail -n {{ auditd_log_tail_lines }} {{ auditd_log_file }}"
+  register: auditd_log_tail
+  changed_when: false
+  failed_when: false
+
+- name: "Шаг 8/11 | Вывести последние строки audit.log"
+  ansible.builtin.debug:
+    msg: |-
+      Последние {{ auditd_log_tail_lines }} строк {{ auditd_log_file }}:
+      {% if (auditd_log_tail.stdout | default('') | trim) == '' %}
+      <лог пока пуст или событий еще нет>
+      {% else %}
+      {{ auditd_log_tail.stdout }}
+      {% endif %}
+
+- name: "Шаг 8/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 8/11 завершен. Перехожу к шагу 9/11."
+
+- name: "Шаг 9/11 | START | Создание файла правил"
+  ansible.builtin.debug:
+    msg: "Идет шаг 9/11: подготавливаю каталог и файл {{ auditd_rules_file }}."
+
+- name: "Шаг 9/11 | Убедиться, что каталог rules.d существует"
+  ansible.builtin.file:
+    path: "{{ auditd_rules_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: "Шаг 9/11 | Создать server.rules если файла нет"
+  ansible.builtin.file:
+    path: "{{ auditd_rules_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0640"
+    access_time: preserve
+    modification_time: preserve
+
+- name: "Шаг 9/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 9/11 завершен. Перехожу к шагу 10/11."
+
+- name: "Шаг 10/11 | START | Запись правил auditd"
+  ansible.builtin.debug:
+    msg: "Идет шаг 10/11: записываю правила в {{ auditd_rules_file }}."
+
+- name: "Шаг 10/11 | Применить server.rules"
+  ansible.builtin.template:
+    src: server.rules.j2
+    dest: "{{ auditd_rules_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+    backup: true
+  register: auditd_rules_apply_result
+
+- name: "Шаг 10/11 | Вывести результат применения правил"
+  ansible.builtin.debug:
+    msg: "Файл {{ auditd_rules_file }} обновлен: {{ auditd_rules_apply_result.changed }}."
+
+- name: "Шаг 10/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 10/11 завершен. Перехожу к шагу 11/11."
+
+- name: "Шаг 11/11 | START | Компиляция и проверка правил"
+  ansible.builtin.debug:
+    msg: "Идет шаг 11/11: выполняю augenrules --load и проверяю auditctl -l."
+
+- name: "Шаг 11/11 | Выполнить augenrules --load"
+  ansible.builtin.command: augenrules --load
+  register: augenrules_load_result
+  changed_when: false
+
+- name: "Шаг 11/11 | Выполнить auditctl -l"
+  ansible.builtin.command: auditctl -l
+  register: auditctl_list_result
+  changed_when: false
+
+- name: "Шаг 11/11 | Вывести список загруженных правил"
+  ansible.builtin.debug:
+    msg: |-
+      Текущие правила auditctl -l:
+      {% if (auditctl_list_result.stdout | default('') | trim) == '' %}
+      <список правил пуст>
+      {% else %}
+      {{ auditctl_list_result.stdout }}
+      {% endif %}
+
+- name: "Шаг 11/11 | END"
+  ansible.builtin.debug:
+    msg: "Шаг 11/11 завершен. Настройка auditd полностью выполнена."

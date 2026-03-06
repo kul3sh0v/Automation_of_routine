@@ -1,0 +1,31 @@
+---
+- name: Configure auditd baseline
+  hosts: auditd
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: "Проверка sudo-доступа | START"
+      ansible.builtin.debug:
+        msg: "Проверяю, что подключение по SSH с sudo-правами работает."
+
+    - name: "Проверка sudo-доступа | Выполнить id -u с become"
+      ansible.builtin.command: id -u
+      register: sudo_id_check
+      changed_when: false
+
+    - name: "Проверка sudo-доступа | Убедиться, что команда выполнена от root"
+      ansible.builtin.assert:
+        that:
+          - sudo_id_check.stdout | trim == "0"
+        fail_msg: >-
+          Sudo-повышение не сработало. Проверьте права пользователя (sudo) и параметры
+          подключения ansible_become/ansible_become_method.
+        success_msg: "Sudo-повышение работает корректно."
+
+    - name: "Проверка sudo-доступа | END"
+      ansible.builtin.debug:
+        msg: "Проверка sudo завершена. Перехожу к настройке auditd."
+
+  roles:
+    - role: auditd

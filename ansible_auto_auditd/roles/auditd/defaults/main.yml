@@ -1,0 +1,10 @@
+---
+auditd_packages_map:
+  Debian:
+    - auditd
+    - audispd-plugins
+  RedHat:
+    - audit
+  Archlinux:
+    - audit
+

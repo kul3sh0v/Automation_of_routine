@@ -10,3 +10,4 @@ venv/
 .DS_Store
 Thumbs.db
 desktop.ini
+ansible_auto_vpn/.ansible/

@@ -1,0 +1,54 @@
+#--------------------------------------------------
+# Изменения пользователей
+# --------------------------------------------------
+-w /etc/passwd -p wa -k user_changes
+-w /etc/group -p wa -k user_changes
+-w /etc/shadow -p wa -k user_changes
+-w /etc/gshadow -p wa -k user_changes
+
+# --------------------------------------------------
+# sudo
+# --------------------------------------------------
+-w /etc/sudoers -p wa -k sudo_changes
+-w /etc/sudoers.d/ -p wa -k sudo_changes
+-w /usr/bin/sudo -p x -k sudo_exec
+
+# --------------------------------------------------
+# SSH
+# --------------------------------------------------
+-w /etc/ssh/sshd_config -p wa -k ssh_changes
+
+# --------------------------------------------------
+# systemd
+# --------------------------------------------------
+-w /etc/systemd/system/ -p wa -k systemd_units
+-w /lib/systemd/system/ -p wa -k systemd_units
+
+# --------------------------------------------------
+# cron
+# --------------------------------------------------
+-w /etc/crontab -p wa -k cron_changes
+-w /etc/cron.d/ -p wa -k cron_changes
+
+# --------------------------------------------------
+# network
+# --------------------------------------------------
+-w /etc/hosts -p wa -k network_mod
+-w /etc/resolv.conf -p wa -k network_mod
+
+# --------------------------------------------------
+# login activity
+# --------------------------------------------------
+-w /var/log/faillog -p wa -k auth_fail
+-w /var/log/lastlog -p wa -k logins
+-w /run/utmp -p wa -k session
+
+# --------------------------------------------------
+# file permission changes
+# --------------------------------------------------
+-a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -k perm_change
+-a always,exit -F arch=b32 -S chmod -S fchmod -S fchmodat -k perm_change
+
+# security
+-w /etc/security/ -p wa -k security_changes
+
